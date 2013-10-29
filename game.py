@@ -25,6 +25,7 @@ def main():
 
 # Update the objects
 def update(game):
+	game.timer.tick()
 	game.camera.update(game.player)
 	game.keyboard.update()
 	game.player.update()
@@ -38,6 +39,17 @@ def draw(screen, game):
 	for e in game.entities:
 		screen.blit(e.image, game.camera.apply(e))
 
+	if game.debug:
+		s = pygame.Surface((200,50))	
+		s.fill((0,0,255))
+		screen.blit(s, (0,0))
+
+		player_pos = game.font.render("Player: " + str(game.player.rect.bottomright), True,(255,255,255))
+		fps = game.font.render("FPS: " + str(game.timer.get_fps()), True,(255,255,255))
+		screen.blit(player_pos,(5,0))
+		screen.blit(fps,(5,12))
+
+
 class Game():
 	""" Game data """
 	def __init__(self):
@@ -48,8 +60,9 @@ class Game():
 		self.keyboard = Keyboard()
 		self.camera = Camera(len(self.level.raw[0])*32, len(self.level.raw)*32)
 		self.player = Player(32, 32, self.level, self.keyboard)
-		self.enemies = [Goon(128,128, self.level)]
-
+		self.enemies = [Goon(900,100, self.level), Goon(900,510, self.level), Goon(600,574, self.level)]
+		self.debug = True
+		self.font = pygame.font.SysFont("arial",12)
 
 	def setup(self, map):
 		""" Setup the current level """
@@ -94,32 +107,28 @@ class Moveable(Entity):
 
 		""" Apply gravity to all moveable objects """
 		if not self.onGround:
-			# only accelerate with gravity if in the air
 			self.yvel += 0.3
-			# max falling speed
 			if self.yvel > 30: self.yvel = 30
 
-		# increment in x direction
 		self.rect.left += self.xvel
-		# do x-axis collisions
 		self.collide(self.xvel, 0)
-		# increment in y direction
 		self.rect.top += self.yvel
-		# assuming we're in the air
 		self.onGround = False;
-		# do y-axis collisions
 		self.collide(0, self.yvel)
 
 	def collide(self, xvel, yvel):
 		for p in self.level.platforms:
 			if pygame.sprite.collide_rect(self, p):
-				if xvel > 0: self.rect.right = p.rect.left
-				if xvel < 0: self.rect.left = p.rect.right
+				if xvel > 0: 
+					self.rect.right = p.rect.left
+				if xvel < 0: 
+					self.rect.left = p.rect.right
 				if yvel > 0:
 					self.rect.bottom = p.rect.top
 					self.onGround = True
 					self.yvel = 0
-				if yvel < 0: self.rect.top = p.rect.bottom
+				if yvel < 0: 
+					self.rect.top = p.rect.bottom
 
 class Character(Moveable):
 	def __init__(self, x, y, level):
@@ -132,7 +141,6 @@ class Player(Character):
 		self.keyboard = keyboard
 
 	def update(self):
-		print self.keyboard.keysDown
 		keysDown = self.keyboard.keysDown
 		right = False
 		left = False
@@ -163,10 +171,44 @@ class Goon(Enemy):
 	def __init__(self, x, y, level):
 		super(Goon, self).__init__(x,y, level)
 		self.image.fill(pygame.Color("#0000FF"))
+		self.speed = 2
+		self.xvel = self.speed
 
 	def update(self):
-		self.xvel = 5
+		# Edge detection
+		if self.xvel != 0:
+			e = self.rect.bottomright
+			point = (1,1)
+			if self.xvel < 0:
+				e = self.rect.bottomleft
+				point = (-1,1)
+			cp = map(sum, zip(e, point))
+
+			collide = False
+			for p in self.level.platforms:
+				if p.rect.collidepoint(cp):
+					collide = True
+
+			if not collide:		
+				self.xvel = -(self.xvel) 
+
 		super(Goon, self).update()
+
+	def collide(self, xvel, yvel):
+		for p in self.level.platforms:
+			if pygame.sprite.collide_rect(self, p):
+				if xvel > 0: 
+					self.rect.right = p.rect.left
+					self.xvel = -(self.speed)
+				if xvel < 0: 
+					self.rect.left = p.rect.right
+					self.xvel = self.speed
+				if yvel > 0:
+					self.rect.bottom = p.rect.top
+					self.onGround = True
+					self.yvel = 0
+				if yvel < 0: 
+					self.rect.top = p.rect.bottom
 
 class Level:
 	""" Represents a game map """
